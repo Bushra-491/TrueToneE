@@ -3,7 +3,6 @@ import numpy as np
 import librosa
 import joblib
 import tensorflow as tf
-from scipy.signal import butter, lfilter
 from pydub import AudioSegment
 import logging
 from flask import Flask, request, jsonify
@@ -48,49 +47,44 @@ def extract_features(y: np.ndarray, sr: int) -> np.ndarray:
 @app.route('/predict', methods=['POST'])
 def predict():
     try:
-        # Check if a file is present
         if 'file' not in request.files:
             return jsonify({'error': 'No file provided'}), 400
-        
+
         file = request.files['file']
-        
-        # Save uploaded file
+
+        # Save and preprocess audio
         in_path = "input_audio"
         out_path = "processed_audio.wav"
         file.save(in_path)
-
-        # Convert to wav
         convert_to_wav(in_path, out_path)
-
-        # Load audio
         y, sr = librosa.load(out_path, sr=16000)
         y = remove_noise(y, sr)
-
-        # Feature extraction
         features = extract_features(y, sr)
-        features = scaler.transform([features])
+        features_scaled = scaler.transform([features])
 
-        # Run inference
-        input_data = np.expand_dims(features.astype(np.float32), axis=0)
-        interpreter.set_tensor(input_details[0]['index'], input_data)
+        # TFLite inference
+        interpreter.set_tensor(input_details[0]['index'], features_scaled.astype(np.float32))
         interpreter.invoke()
         output_data = interpreter.get_tensor(output_details[0]['index'])
 
-        # Decode prediction
+        # Prediction
         predicted_class = np.argmax(output_data)
         predicted_label = label_encoder.inverse_transform([predicted_class])[0]
 
-        # Return response
+        # Cleanup
+        os.remove(in_path)
+        os.remove(out_path)
+
         return jsonify({'prediction': predicted_label})
 
     except Exception as e:
         app.logger.error(f"Error during prediction: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Health Check
+# Health Check Endpoint
 @app.route('/', methods=['GET'])
 def index():
-    return "Flask API is running 🚀"
+    return "Flask API is running successfully🚀"
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
