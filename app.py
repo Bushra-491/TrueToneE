@@ -71,7 +71,7 @@ def predict():
         features = scaler.transform([features])
 
         # Run inference
-        input_data = np.expand_dims(features.astype(np.float32), axis=0)
+        input_data = features.astype(np.float32)       
         interpreter.set_tensor(input_details[0]['index'], input_data)
         interpreter.invoke()
         output_data = interpreter.get_tensor(output_details[0]['index'])
